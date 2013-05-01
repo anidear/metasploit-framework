@@ -37,7 +37,7 @@ class Metasploit3 < Msf::Auxiliary
 
 	end
 
-	def get_ppooe_credentials(conf)
+	def get_pppoe_credentials(conf)
 
 		user = ""
 		password = ""
